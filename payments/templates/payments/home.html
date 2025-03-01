@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Магазин</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container py-5">
+    <h1 class="text-center mb-4">Добро пожаловать в наш магазин!</h1>
+
+    <!-- Вывод товаров -->
+    <div class="row">
+        {% for item in items %}
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{{ item.name }}</h5>
+                    <p class="card-text">{{ item.description }}</p>
+                    <p class="fw-bold">Цена: {{ item.price }} ₽</p>
+
+                    <!-- Кнопка "В корзину" -->
+                    <button onclick="addToCart({{ item.id }})" class="btn btn-success">В корзину</button>
+
+                    <!-- Кнопка "Подробнее" -->
+                    <a href="{% url 'item' item.id %}" class="btn btn-primary">Подробнее</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Кнопка "Создать заказ" -->
+    <div class="text-center mt-4">
+        <button id="create-order" class="btn btn-warning btn-lg">Создать заказ</button>
+    </div>
+</div>
+
+<!-- Подключение Stripe -->
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    var stripe = Stripe("{{ STRIPE_PUBLIC_KEY }}");
+
+    // ✅ Функция добавления товара в корзину
+    function addToCart(itemId) {
+        let cart = JSON.parse(localStorage.getItem("cart")) || [];  // Загружаем корзину
+        if (!cart.includes(itemId)) {
+            cart.push(itemId);  // Добавляем товар
+        }
+        localStorage.setItem("cart", JSON.stringify(cart));  // Сохраняем в localStorage
+        alert("✅ Товар добавлен в корзину!");
+        console.log("🛒 Корзина после добавления:", cart);
+    }
+
+    // ✅ Функция создания заказа и редиректа на оплату
+    document.getElementById("create-order").addEventListener("click", function () {
+        let cart = JSON.parse(localStorage.getItem("cart")) || [];
+        console.log("📦 Текущая корзина:", cart);
+
+        if (cart.length === 0) {
+            alert("🛒 Корзина пуста! Добавьте товары перед оформлением заказа.");
+            return;
+        }
+
+        let url = `/create_order/?` + cart.map(id => `items=${id}`).join("&");
+        console.log("🚀 Отправляем запрос на создание заказа:", url);
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                console.log("🔄 Ответ от сервера:", data);
+                if (!data.order_id) {
+                    alert("❌ Ошибка: заказ не создан!");
+                    return;
+                }
+
+                localStorage.removeItem("cart");  // Очистить корзину после заказа
+                console.log("🛒 Корзина очищена после заказа.");
+
+                // Теперь получаем session_id для оплаты
+                fetch(`/buy_order/${data.order_id}/`)
+                    .then(response => response.json())
+                    .then(session => {
+                        if (!session.session_id) {
+                            alert("❌ Ошибка: session_id не получен!");
+                            return;
+                        }
+                        console.log("✅ session_id получен:", session.session_id);
+                        stripe.redirectToCheckout({ sessionId: session.session_id });
+                    })
+                    .catch(error => {
+                        console.error("❌ Ошибка при получении session_id:", error);
+                        alert("Ошибка при оплате!");
+                    });
+
+            })
+            .catch(error => {
+                console.error("❌ Ошибка при создании заказа:", error);
+                alert("Ошибка! Проверь консоль.");
+            });
+    });
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

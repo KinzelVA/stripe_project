@@ -1,0 +1,24 @@
+<h1>Ваш заказ</h1>
+<ul>
+    {% for item in order.items.all %}
+        <li>{{ item.name }} - {{ item.price }} ₽</li>
+    {% endfor %}
+</ul>
+<p><b>Общая сумма: {{ order.total_amount }} ₽</b></p>
+
+<button id="pay-button">Оплатить</button>
+
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    var stripe = Stripe("your_test_public_key");
+    var payButton = document.getElementById("pay-button");
+
+    var orderId = "{{ order.id }}"; // Передаём order.id в JavaScript
+
+    payButton.addEventListener("click", function () {
+        fetch(`/buy_order/${orderId}/`, { method: "GET" })
+            .then(response => response.json())
+            .then(session => stripe.redirectToCheckout({ sessionId: session.id }))
+            .catch(error => console.error("Ошибка при оплате:", error));
+    });
+</script>
